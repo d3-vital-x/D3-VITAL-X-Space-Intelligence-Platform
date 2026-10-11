@@ -1,5 +1,3 @@
-
-%%writefile /content/D3-VITAL-X-Space-Intelligence-Platform/03_INPUT_ADAPTERS/dicom_adapter.py
 """
 D³ VITAL-X Space Intelligence Platform
 Module 08: dicom_adapter.py
