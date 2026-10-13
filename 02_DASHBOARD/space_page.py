@@ -338,7 +338,7 @@ def render_page() -> None:
                 if len(x) != len(y):
                     raise ValueError("The selected signals are not aligned.")
 
-               coupling_result = analyze_coupling_transition(
+                coupling_result = analyze_coupling_transition(
                     x,
                     y,
                     window_size=min(200, max(2, len(x))),
