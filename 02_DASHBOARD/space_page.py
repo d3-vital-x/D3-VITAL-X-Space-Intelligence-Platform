@@ -338,12 +338,12 @@ def render_page() -> None:
                 if len(x) != len(y):
                     raise ValueError("The selected signals are not aligned.")
 
-                coupling_result = analyze_coupling_transition(
+                                coupling_result = analyze_coupling_transition(
                     x,
                     y,
                     window_size=min(200, max(2, len(x))),
                     step=max(1, min(50, max(1, len(x) // 4))),
-                    min_samples=min(10, max(2, min(200, len(x)))),  # এখানে একটি ব্র্যাকেট কম ছিল
+                    min_samples=max(2, min(10, len(x))),
                     missing_policy=missing_policy,
                 )
 
