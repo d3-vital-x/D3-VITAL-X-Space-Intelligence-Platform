@@ -94,23 +94,15 @@ PAGE_MODULES = {
 # Optional public analytics files. Presence alone does not prove
 # correctness, scientific validity, or complete integration.
 OPTIONAL_ANALYTICS_FILES = (
-    "metrics.py",
-    "transition_analysis.py",
-    "anomaly_scoring.py",
-    "uncertainty.py",
-    "explainability.py",
+    "entropy_variance.py",
+    "coupling_transition.py",
+    "anomaly_evaluator.py",
 )
 
 OPTIONAL_VISUALIZATION_FILES = (
-    "entropy_map.py",
-    "variance_map.py",
-    "gradient_map.py",
-    "csi_map.py",
-    "anomaly_overlay.py",
-    "timeseries_plot.py",
-    "dashboard_metrics.py",
+    "result_view.py",
+    "export.py",
 )
-
 
 # ============================================================
 # UTILITY FUNCTIONS
