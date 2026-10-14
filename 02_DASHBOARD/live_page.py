@@ -386,12 +386,7 @@ def run_contract_tests() -> dict[str, bool]:
 
 def render_page() -> None:
     """Render the Live Data Status and Signal Monitoring page."""
-    st.set_page_config(
-        page_title="D³ VITAL-X | Live Monitoring",
-        page_icon="📡",
-        layout="wide",
-    )
-
+    
     st.title(f"📡 Module {MODULE_NUMBER}: Live Data Monitoring")
 
     st.caption(
