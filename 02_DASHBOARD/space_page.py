@@ -332,6 +332,10 @@ def render_page() -> None:
                 missing_policy=missing_policy,
             )
 
+                        if entropy_result is None:
+                st.error("Error: calculate_entropy_variance returned None.")
+                return
+
             entropy_data = _to_plain_data(entropy_result)
             analysis_report["analyses"]["entropy_variance"] = entropy_data
 
