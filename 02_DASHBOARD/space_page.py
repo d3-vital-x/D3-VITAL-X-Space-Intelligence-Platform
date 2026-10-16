@@ -55,7 +55,10 @@ MODULE_VERSION = "1.0.0"
 
 
 def _to_plain_data(value: Any) -> Any:
-    """Convert common result objects to JSON-compatible data."""
+    """Convert common result objects to JSON-compatible data safely."""
+    if value is None:
+        return None
+
     if hasattr(value, "to_dict") and callable(value.to_dict):
         return value.to_dict()
 
