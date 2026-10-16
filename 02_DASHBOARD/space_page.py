@@ -28,6 +28,7 @@ from __future__ import annotations
 import io
 import json
 import sys
+import importlib.util
 from pathlib import Path
 from typing import Any
 
@@ -36,14 +37,14 @@ import pandas as pd
 import streamlit as st
 
 
-# Resolve project modules when this file is run as a Streamlit page.
+# Resolve project modules dynamically to bypass numeric folder import issues.
 PAGE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = PAGE_DIR.parent.parent
 
-for module_dir in (
-    PROJECT_ROOT / "06_ANALYTICS",
-    PROJECT_ROOT / "07_VISUALIZATION",
-):
+ANALYTICS_DIR = PROJECT_ROOT / "06_ANALYTICS"
+VISUALIZATION_DIR = PROJECT_ROOT / "07_VISUALIZATION"
+
+for module_dir in (ANALYTICS_DIR, VISUALIZATION_DIR):
     module_path = str(module_dir)
     if module_path not in sys.path:
         sys.path.insert(0, module_path)
