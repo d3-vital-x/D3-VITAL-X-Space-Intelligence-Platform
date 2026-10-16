@@ -724,9 +724,10 @@ def render_page() -> None:
                 observed_metrics: dict[str, float] = {}
 
                 for metric_name in (
-                    "shannon_entropy_bits",
+                    "entropy_bits",
                     "variance",
                 ):
+
                     if metric_name in entropy_data:
                         observed_metrics[metric_name] = (
                             _finite_number(
