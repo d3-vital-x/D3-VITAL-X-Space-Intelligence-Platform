@@ -1,3 +1,4 @@
+
 """
 D³ VITAL-X Space Intelligence Platform
 Module 18: space_page.py
@@ -27,7 +28,6 @@ from __future__ import annotations
 import io
 import json
 import sys
-import importlib.util
 from pathlib import Path
 from typing import Any
 
@@ -36,14 +36,14 @@ import pandas as pd
 import streamlit as st
 
 
-# Resolve project modules dynamically to bypass numeric folder import issues.
+# Resolve project modules when this file is run as a Streamlit page.
 PAGE_DIR = Path(__file__).resolve().parent
-PROJECT_ROOT = PAGE_DIR.parent
+PROJECT_ROOT = PAGE_DIR.parent.parent
 
-ANALYTICS_DIR = PROJECT_ROOT / "06_ANALYTICS"
-VISUALIZATION_DIR = PROJECT_ROOT / "07_VISUALIZATION"
-
-for module_dir in (ANALYTICS_DIR, VISUALIZATION_DIR):
+for module_dir in (
+    PROJECT_ROOT / "06_ANALYTICS",
+    PROJECT_ROOT / "07_VISUALIZATION",
+):
     module_path = str(module_dir)
     if module_path not in sys.path:
         sys.path.insert(0, module_path)
@@ -55,10 +55,7 @@ MODULE_VERSION = "1.0.0"
 
 
 def _to_plain_data(value: Any) -> Any:
-    """Convert common result objects to JSON-compatible data safely."""
-    if value is None:
-        return None
-
+    """Convert common result objects to JSON-compatible data."""
     if hasattr(value, "to_dict") and callable(value.to_dict):
         return value.to_dict()
 
@@ -311,12 +308,7 @@ def render_page() -> None:
 
     if st.button("Run selected analytics", type="primary"):
         try:
-            # Dynamically load entropy_variance from 06_ANALYTICS
-            ev_path = ANALYTICS_DIR / "entropy_variance.py"
-            ev_spec = importlib.util.spec_from_file_location("entropy_variance", ev_path)
-            entropy_variance = importlib.util.module_from_spec(ev_spec)
-            ev_spec.loader.exec_module(entropy_variance)
-            calculate_entropy_variance = entropy_variance.calculate_entropy_variance
+            from entropy_variance import calculate_entropy_variance
 
             x = _get_numeric_series(frame, selected_x)
 
@@ -332,10 +324,6 @@ def render_page() -> None:
                 missing_policy=missing_policy,
             )
 
-                        if entropy_result is None:
-                st.error("Error: calculate_entropy_variance returned None.")
-                return
-
             entropy_data = _to_plain_data(entropy_result)
             analysis_report["analyses"]["entropy_variance"] = entropy_data
 
@@ -343,12 +331,7 @@ def render_page() -> None:
             st.json(entropy_data)
 
             if selected_y is not None:
-                # Dynamically load coupling_transition from 06_ANALYTICS
-                ct_path = ANALYTICS_DIR / "coupling_transition.py"
-                ct_spec = importlib.util.spec_from_file_location("coupling_transition", ct_path)
-                coupling_transition = importlib.util.module_from_spec(ct_spec)
-                ct_spec.loader.exec_module(coupling_transition)
-                analyze_coupling_transition = coupling_transition.analyze_coupling_transition
+                from coupling_transition import analyze_coupling_transition
 
                 y = _get_numeric_series(frame, selected_y)
 
@@ -360,7 +343,7 @@ def render_page() -> None:
                     y,
                     window_size=min(200, max(2, len(x))),
                     step=max(1, min(50, max(1, len(x) // 4))),
-                    min_samples=max(2, min(10, len(x))),
+                    min_samples=min(10, max(2, min(200, len(x))),
                     missing_policy=missing_policy,
                 )
 
@@ -423,12 +406,7 @@ def render_page() -> None:
             )
         else:
             try:
-                # Dynamically load anomaly_evaluator from 06_ANALYTICS
-                ae_path = ANALYTICS_DIR / "anomaly_evaluator.py"
-                ae_spec = importlib.util.spec_from_file_location("anomaly_evaluator", ae_path)
-                anomaly_evaluator = importlib.util.module_from_spec(ae_spec)
-                ae_spec.loader.exec_module(anomaly_evaluator)
-                evaluate_anomaly_candidates = anomaly_evaluator.evaluate_anomaly_candidates
+                from anomaly_evaluator import evaluate_anomaly_candidates
 
                 baseline = _baseline_from_upload(baseline_file)
 
