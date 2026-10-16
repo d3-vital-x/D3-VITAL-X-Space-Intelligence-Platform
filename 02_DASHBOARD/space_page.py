@@ -1,4 +1,3 @@
-
 """
 D³ VITAL-X Space Intelligence Platform
 Module 18: space_page.py
@@ -39,7 +38,7 @@ import streamlit as st
 
 # Resolve project modules dynamically to bypass numeric folder import issues.
 PAGE_DIR = Path(__file__).resolve().parent
-PROJECT_ROOT = PAGE_DIR.parent.parent
+PROJECT_ROOT = PAGE_DIR.parent
 
 ANALYTICS_DIR = PROJECT_ROOT / "06_ANALYTICS"
 VISUALIZATION_DIR = PROJECT_ROOT / "07_VISUALIZATION"
@@ -417,7 +416,12 @@ def render_page() -> None:
             )
         else:
             try:
-                from anomaly_evaluator import evaluate_anomaly_candidates
+                # Dynamically load anomaly_evaluator from 06_ANALYTICS
+                ae_path = ANALYTICS_DIR / "anomaly_evaluator.py"
+                ae_spec = importlib.util.spec_from_file_location("anomaly_evaluator", ae_path)
+                anomaly_evaluator = importlib.util.module_from_spec(ae_spec)
+                ae_spec.loader.exec_module(anomaly_evaluator)
+                evaluate_anomaly_candidates = anomaly_evaluator.evaluate_anomaly_candidates
 
                 baseline = _baseline_from_upload(baseline_file)
 
