@@ -50,17 +50,46 @@ MODULE_VERSION = "1.1.0"
 
 
 # ---------------------------------------------------------
-# IMPORT PATH CONFIGURATION
+# ROBUST ANALYTICS MODULE DISCOVERY
 # ---------------------------------------------------------
 
-for module_dir in (
-    PROJECT_ROOT / "06_ANALYTICS",
-    PROJECT_ROOT / "07_VISUALIZATION",
-):
-    module_path = str(module_dir)
+PAGE_DIR = Path(__file__).resolve().parent
 
-    if module_path not in sys.path:
-        sys.path.insert(0, module_path)
+PROJECT_ROOT = None
+ANALYTICS_DIR = None
+
+for candidate in (PAGE_DIR, *PAGE_DIR.parents):
+    possible_analytics = candidate / "06_ANALYTICS"
+    required_file = possible_analytics / "entropy_variance.py"
+
+    if required_file.is_file():
+        PROJECT_ROOT = candidate
+        ANALYTICS_DIR = possible_analytics
+        break
+
+if ANALYTICS_DIR is not None:
+    analytics_path = str(ANALYTICS_DIR)
+
+    # Prioritize the exact directory containing the modules.
+    if analytics_path in sys.path:
+        sys.path.remove(analytics_path)
+
+    sys.path.insert(0, analytics_path)
+
+else:
+    # Keep the diagnostic explicit if deployment files are missing.
+    st.error(
+        "Analytics module directory could not be located."
+    )
+    st.code(
+        f"Page directory: {PAGE_DIR}\n"
+        f"Working directory: {Path.cwd()}\n"
+        "Expected file: 06_ANALYTICS/entropy_variance.py"
+    )
+    st.stop()
+
+# Diagnostic metadata for deployment verification.
+st.session_state["space_analytics_path"] = str(ANALYTICS_DIR)
 
 
 # ---------------------------------------------------------
