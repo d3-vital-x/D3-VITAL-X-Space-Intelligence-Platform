@@ -309,7 +309,12 @@ def render_page() -> None:
 
     if st.button("Run selected analytics", type="primary"):
         try:
-            from entropy_variance import calculate_entropy_variance
+            # Dynamically load entropy_variance from 06_ANALYTICS
+            ev_path = ANALYTICS_DIR / "entropy_variance.py"
+            ev_spec = importlib.util.spec_from_file_location("entropy_variance", ev_path)
+            entropy_variance = importlib.util.module_from_spec(ev_spec)
+            ev_spec.loader.exec_module(entropy_variance)
+            calculate_entropy_variance = entropy_variance.calculate_entropy_variance
 
             x = _get_numeric_series(frame, selected_x)
 
@@ -332,7 +337,12 @@ def render_page() -> None:
             st.json(entropy_data)
 
             if selected_y is not None:
-                from coupling_transition import analyze_coupling_transition
+                # Dynamically load coupling_transition from 06_ANALYTICS
+                ct_path = ANALYTICS_DIR / "coupling_transition.py"
+                ct_spec = importlib.util.spec_from_file_location("coupling_transition", ct_path)
+                coupling_transition = importlib.util.module_from_spec(ct_spec)
+                ct_spec.loader.exec_module(coupling_transition)
+                analyze_coupling_transition = coupling_transition.analyze_coupling_transition
 
                 y = _get_numeric_series(frame, selected_y)
 
