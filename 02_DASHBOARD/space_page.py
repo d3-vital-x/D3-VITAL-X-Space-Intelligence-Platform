@@ -660,6 +660,178 @@ def render_page() -> None:
 
                 st.json(coupling_data)
 
+            # ---------------------------------------------
+            # OPTIONAL MODULE 31: PRIVATE CYTHON ENGINE
+            # ---------------------------------------------
+
+            if use_private_engine:
+                source_hash = hashlib.sha256(
+                    uploaded_csv.getvalue()
+                ).hexdigest()
+
+                # Use actual uploaded signal samples only.
+                # Omission is applied to this signal alone.
+                if missing_policy == "omit":
+                    engine_signal = x[np.isfinite(x)]
+                else:
+                    engine_signal = x
+
+                engine_record: dict[str, Any] = {
+                    "execution_mode": "PRIVATE_ENGINE",
+                    "status": "NOT_STARTED",
+                    "source_hash": source_hash,
+                    "scientific_boundary": (
+                        "Exploratory output only; not a confirmed "
+                        "discovery or physical interpretation."
+                    ),
+                }
+
+                try:
+                    if engine_signal.ndim != 1:
+                        raise ValueError(
+                            "The selected signal must be one-dimensional."
+                        )
+
+                    if engine_signal.size < 200:
+                        raise ValueError(
+                            "The selected signal has fewer than 200 "
+                            "valid samples. Module 31 currently uses "
+                            "a window size of 200."
+                        )
+
+                    if not np.isfinite(engine_signal).all():
+                        raise ValueError(
+                            "The selected signal contains non-finite "
+                            "values after the chosen missing-data policy."
+                        )
+
+                    # Lazy imports: standard analytics do not require
+                    # the private compiled extension.
+                    from d3_core import build_features
+                    from engine_bridge import (
+                        create_private_engine_client,
+                    )
+                    from blackbox_client import BlackBoxRequest
+
+                    # This closure supplies the real signal directly.
+                    # The signal is NOT placed in request metadata.
+                    private_client = create_private_engine_client(
+                        target_id="space-observation",
+                        cython_build_features=build_features,
+                        get_counts=lambda _request: engine_signal,
+                    )
+
+                    request = BlackBoxRequest(
+                        request_id=str(uuid4()),
+                        dataset_id=source_hash,
+                        target_id="space-observation",
+                        analysis_mode="exploratory",
+                        input_type="csv",
+                        requested_features=[
+                            "entropy",
+                            "variance",
+                        ],
+                        source_hash=source_hash,
+                        provenance={
+                            "source_type": "uploaded_csv",
+                            "source_hash": source_hash,
+                        },
+                        metadata={
+                            "selected_signal": str(selected_x),
+                            "sample_count": int(engine_signal.size),
+                            "missing_policy": missing_policy,
+                        },
+                        human_review_required=False,
+                        timestamp=datetime.now(
+                            timezone.utc
+                        ).isoformat(),
+                        protocol_version="1.0",
+                    )
+
+                    response = private_client.execute(request)
+
+                    response_data = _to_plain_data(response)
+
+                    # Normalize the response to strict JSON-compatible
+                    # values before adding it to the report.
+                    response_json = json.loads(
+                        _strict_json_bytes(response_data).decode("utf-8")
+                    )
+
+                    response_status = str(
+                        response_json.get("status", "")
+                    ).upper()
+
+                    engine_record["response"] = response_json
+
+                    if "COMPLETED" in response_status:
+                        engine_record["status"] = "COMPLETED"
+                        st.subheader("Private Cython Engine response")
+                        st.json(response_json)
+
+                        st.success(
+                            "The private engine returned a completed "
+                            "response. Verify the feature definitions "
+                            "before scientific interpretation."
+                        )
+                    else:
+                        engine_record["status"] = (
+                            response_status or "UNCONFIRMED"
+                        )
+
+                        st.warning(
+                            "The engine did not report a confirmed "
+                            "COMPLETED status. Treat its output as "
+                            "unverified; check the response and setup."
+                        )
+                        st.json(response_json)
+
+                except (ImportError, ModuleNotFoundError) as exc:
+                    engine_record["status"] = "NOT_CONFIGURED"
+                    engine_record["error"] = (
+                        f"{type(exc).__name__}: {exc}"
+                    )
+
+                    st.error(
+                        "Private Engine is unavailable. Confirm that "
+                        "d3_core is compiled for this environment and "
+                        "Module 31 imports resolve correctly. Standard "
+                        "analytics can still be reviewed."
+                    )
+                    st.code(engine_record["error"])
+
+                except (ValueError, TypeError, KeyError) as exc:
+                    engine_record["status"] = "FAILED"
+                    engine_record["error"] = (
+                        f"{type(exc).__name__}: {exc}"
+                    )
+
+                    st.error(
+                        "Private Engine validation or execution failed."
+                    )
+                    st.code(engine_record["error"])
+
+                except Exception as exc:
+                    engine_record["status"] = "FAILED"
+                    engine_record["error"] = (
+                        f"{type(exc).__name__}: {exc}"
+                    )
+
+                    st.error(
+                        "Private Engine execution failed. No synthetic "
+                        "fallback data will be substituted."
+                    )
+                    st.code(engine_record["error"])
+
+                # Preserve the engine status in the exported report.
+                analysis_report["analyses"]["private_engine"] = (
+                    engine_record
+                )
+
+            # Save standard analytics and any engine status after
+            # the requested analytics have been processed.
+            
+            
             # Save only after all requested analyses complete.
             st.session_state["space_analysis_report"] = (
                 analysis_report
