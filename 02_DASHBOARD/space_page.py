@@ -78,6 +78,23 @@ if ANALYTICS_DIR is not None:
 
     sys.path.insert(0, analytics_path)
 
+    # Discover the public feature-engineering interface.
+    FEATURE_DIR = PROJECT_ROOT / "05_FEATURE_ENGINEERING"
+
+    if not (FEATURE_DIR / "engine_bridge.py").is_file():
+        st.warning(
+            "Module 31 engine_bridge.py was not found. "
+            "Standard analytics remain available; "
+            "private-engine execution is unavailable."
+        )
+    else:
+        feature_path = str(FEATURE_DIR)
+
+        if feature_path in sys.path:
+            sys.path.remove(feature_path)
+
+        sys.path.insert(0, feature_path)
+
 else:
     # Keep the diagnostic explicit if deployment files are missing.
     st.error(
