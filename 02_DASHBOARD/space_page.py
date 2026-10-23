@@ -489,6 +489,17 @@ def render_page() -> None:
     st.divider()
     st.subheader("Signal analytics")
 
+    use_private_engine = st.checkbox(
+        "Also run the Private Cython Engine",
+        value=False,
+        help=(
+            "Optional. Requires a compiled d3_core extension "
+            "and a correctly configured Module 31 bridge. "
+            "If unavailable, no synthetic fallback is used."
+        ),
+        key="space_use_private_engine",
+    )
+    
     if st.button(
         "Run selected analytics",
         type="primary",
