@@ -1,0 +1,32 @@
+# Python & Virtual Environments
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.venv/
+env/
+venv/
+
+# Jupyter Notebook Checkpoints
+.ipynb_checkpoints/
+
+# Private Cythonized Backends & Build Artifacts
+*.pyx
+*.pyd
+*.c
+*.cpp
+private_backend/
+private_coefficients/
+build/
+dist/
+
+# Credentials, Secrets & Environment Variables
+.env
+secret.json
+tokens.txt
+*.key
+credentials/
+
+# OS Specific Files
+.DS_Store
+Thumbs.db
