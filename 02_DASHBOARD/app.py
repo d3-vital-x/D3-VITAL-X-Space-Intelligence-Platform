@@ -661,32 +661,46 @@ def render_data_quality() -> None:
 # ============================================================
 
 def render_visualization() -> None:
+    """Render a lightweight, exploratory view of uploaded data."""
     st.header("📊 Exploratory Visualization")
 
-    raw_bytes = st.session_state["uploaded_data"]
+    raw_bytes = st.session_state.get("uploaded_data")
 
     if raw_bytes is None:
         st.info("Upload a file first.")
         return
 
-    input_type = st.session_state["uploaded_type"]
+    input_type = st.session_state.get("uploaded_type")
 
     if input_type == "CSV":
         try:
+            # Parse the uploaded CSV once for this visualization run.
             frame = pd.read_csv(io.BytesIO(raw_bytes))
 
         except Exception as exc:
             st.error(
-                f"Could not read CSV: {type(exc).__name__}."
+                f"Could not read CSV: {type(exc).__name__}: {exc}"
             )
             return
 
-        numeric_columns = frame.select_dtypes(
-            include="number"
-        ).columns.tolist()
+        if frame.empty or frame.shape[1] == 0:
+            st.warning("The CSV contains no usable data.")
+            return
+
+        # Include columns that can be converted to numeric values.
+        numeric_columns = []
+
+        for column in frame.columns:
+            converted = pd.to_numeric(
+                frame[column],
+                errors="coerce",
+            )
+
+            if converted.notna().any():
+                numeric_columns.append(column)
 
         if not numeric_columns:
-            st.info("No numeric columns were detected.")
+            st.info("No usable numeric columns were detected.")
             return
 
         selected_column = st.selectbox(
@@ -695,15 +709,134 @@ def render_visualization() -> None:
             key="app_visual_signal",
         )
 
-        values = pd.to_numeric(
+        # Preserve original row positions so the x-axis remains
+        # the original sample index.
+        series = pd.to_numeric(
             frame[selected_column],
             errors="coerce",
-        ).replace([np.inf, -np.inf], np.nan)
+        )
 
-        st.line_chart(values.reset_index(drop=True))
+        values = series.to_numpy(dtype=np.float64)
+        row_count = len(values)
 
         st.caption(
-            "Sample-index plot only. This is not a physical anomaly detector."
+            f"Original rows: {row_count:,} | "
+            f"Selected signal: {selected_column}"
+        )
+
+        # Limit the number of displayed points, not the source data.
+        max_points = st.select_slider(
+            "Maximum plotted points",
+            options=[1000, 2000, 5000],
+            value=2000,
+            key="app_visual_max_points",
+        )
+
+        finite_mask = np.isfinite(values)
+        valid_count = int(finite_mask.sum())
+
+        if valid_count == 0:
+            st.warning(
+                "The selected column has no finite numeric values."
+            )
+            return
+
+        # For small signals, retain every original row.
+        if row_count <= max_points:
+            plot_frame = pd.DataFrame({
+                "sample_index": np.arange(row_count),
+                "signal": np.where(
+                    finite_mask, values, np.nan
+                ),
+            })
+
+        else:
+            # Build a min/max envelope. This retains local extremes
+            # better than simply taking every Nth row.
+            bucket_count = max(1, max_points // 2)
+            boundaries = np.linspace(
+                0, row_count, bucket_count + 1, dtype=np.int64
+            )
+
+            plot_indices = []
+            plot_values = []
+
+            for bucket in range(bucket_count):
+                start = int(boundaries[bucket])
+                end = int(boundaries[bucket + 1])
+
+                if end <= start:
+                    continue
+
+                segment = values[start:end]
+                valid = np.isfinite(segment)
+
+                if not valid.any():
+                    # Keep an explicit gap for an entirely invalid bucket.
+                    if plot_values and not np.isnan(plot_values[-1]):
+                        plot_indices.append(start)
+                        plot_values.append(np.nan)
+                    continue
+
+                valid_offsets = np.flatnonzero(valid)
+                valid_values = segment[valid]
+
+                local_min = int(
+                    valid_offsets[np.argmin(valid_values)]
+                )
+                local_max = int(
+                    valid_offsets[np.argmax(valid_values)]
+                )
+
+                # Plot local min/max in their original temporal order.
+                selected_offsets = sorted({
+                    local_min, local_max
+                })
+
+                for offset in selected_offsets:
+                    plot_indices.append(start + offset)
+                    plot_values.append(float(segment[offset]))
+
+                # Keep invalid-data gaps visible between buckets.
+                if not valid.all():
+                    if plot_values and not np.isnan(plot_values[-1]):
+                        plot_indices.append(end - 1)
+                        plot_values.append(np.nan)
+
+            plot_frame = pd.DataFrame({
+                "sample_index": plot_indices,
+                "signal": plot_values,
+            })
+
+            # Defensive cap for rendering overhead.
+            # The envelope normally stays near max_points.
+            if len(plot_frame) > max_points + bucket_count:
+                plot_frame = plot_frame.iloc[
+                    : max_points + bucket_count
+                ]
+
+        st.line_chart(
+            plot_frame,
+            x="sample_index",
+            y="signal",
+            use_container_width=True,
+        )
+
+        st.caption(
+            "Exploratory overview. Large datasets use a min/max "
+            "envelope for display; the original uploaded data is "
+            "not modified. Important features should be checked "
+            "at higher resolution before interpretation."
+        )
+
+        st.metric(
+            "Points sent to chart",
+            f"{len(plot_frame):,}",
+        )
+
+        st.metric(
+            "Finite numeric samples",
+            f"{valid_count:,}",
         )
 
     elif input_type == "IMAGE":
@@ -719,7 +852,8 @@ def render_visualization() -> None:
 
         except Exception as exc:
             st.error(
-                f"Image visualization failed: {type(exc).__name__}."
+                f"Image visualization failed: "
+                f"{type(exc).__name__}: {exc}"
             )
 
     else:
