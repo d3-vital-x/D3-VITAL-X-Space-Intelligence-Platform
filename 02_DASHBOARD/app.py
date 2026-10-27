@@ -816,9 +816,7 @@ def render_visualization() -> None:
                 ]
 
         st.line_chart(
-            plot_frame,
-            x="sample_index",
-            y="signal",
+            plot_frame.set_index("sample_index")["signal"],
             use_container_width=True,
         )
 
