@@ -133,8 +133,15 @@ def format_bytes(size: int) -> str:
 
 
 def detect_input_type(filename: str) -> str:
-    """Detect a supported public input type by extension."""
-    suffix = Path(filename).suffix.lower()
+    """Detect supported public input formats."""
+
+    name = Path(filename).name.lower()
+
+    if name.endswith((".fits", ".fit", ".fts",
+                      ".fits.gz", ".fit.gz", ".fts.gz")):
+        return "FITS"
+
+    suffix = Path(name).suffix
 
     if suffix == ".csv":
         return "CSV"
