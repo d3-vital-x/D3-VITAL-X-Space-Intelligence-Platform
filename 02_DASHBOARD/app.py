@@ -566,6 +566,21 @@ def render_data_upload() -> None:
             language="text",
         )
 
+    elif input_type == "FITS":
+        st.success("FITS file detected.")
+
+        st.info(
+            "JWST / Chandra FITS processing is available "
+            "inside Space Mode → Mission FITS Analysis."
+        )
+
+        st.write({
+            "filename": filename,
+            "size_bytes": len(raw_bytes),
+            "sha256": st.session_state["uploaded_hash"],
+            "processing_status": "NOT_STARTED",
+        })
+        
     elif input_type == "DICOM":
         st.info(
             "DICOM inspection is handled by Biomedical Mode. "
