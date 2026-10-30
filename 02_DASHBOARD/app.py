@@ -102,6 +102,8 @@ OPTIONAL_ANALYTICS_FILES = (
 OPTIONAL_VISUALIZATION_FILES = (
     "result_view.py",
     "export.py",
+    "space_visualization.py",
+    "mission_report.py",
 )
 
 # ============================================================
