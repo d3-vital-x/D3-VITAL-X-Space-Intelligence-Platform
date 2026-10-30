@@ -194,10 +194,11 @@ def find_public_module(filename: str) -> Path | None:
     # Search only known public project locations.
     public_roots = [
         PROJECT_ROOT / "02_DASHBOARD",
+        PROJECT_ROOT / "03_INPUT_ADAPTERS",
         PROJECT_ROOT / "06_ANALYTICS",
         PROJECT_ROOT / "07_VISUALIZATION",
     ]
-
+  
     for root in public_roots:
         if not root.is_dir():
             continue
