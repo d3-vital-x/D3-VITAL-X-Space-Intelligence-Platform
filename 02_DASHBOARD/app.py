@@ -455,6 +455,7 @@ def render_data_upload() -> None:
             "png", "jpg", "jpeg", "bmp",
             "tif", "tiff", "webp",
             "txt", "dat", "dcm", "dicom",
+            "fits", "fit", "fts", "gz",
         ],
         accept_multiple_files=False,
         key="app_main_upload",
