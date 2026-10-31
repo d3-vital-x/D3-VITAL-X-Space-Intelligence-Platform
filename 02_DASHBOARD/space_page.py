@@ -346,6 +346,577 @@ def _baseline_from_upload(uploaded_file: Any) -> dict[str, dict[str, float]]:
     return validated
 
 
+
+# ---------------------------------------------------------
+# MODULES 33–40: MISSION FITS WORKFLOW
+# ---------------------------------------------------------
+
+def render_mission_fits_workflow() -> None:
+    """
+    Connect Modules 33–40 to the Space Mode dashboard.
+
+    Local FITS workflow:
+    Module 34 -> Module 35 -> Module 38
+    -> Module 36/37 -> Module 39 -> Module 40
+
+    Module 33 provides optional JWST MAST archive search.
+    """
+
+    st.divider()
+    st.header("🛰️ Mission FITS Analysis")
+
+    st.caption(
+        "Local JWST / Chandra FITS inspection, "
+        "product routing, visualization and JSON reporting."
+    )
+
+    # -----------------------------------------------------
+    # MODULE 33: OPTIONAL JWST MAST SEARCH
+    # -----------------------------------------------------
+
+    with st.expander(
+        "🌐 Public JWST Archive Search (MAST)",
+        expanded=False,
+    ):
+        st.write(
+            "Search publicly available JWST observations. "
+            "This search returns archive metadata, not calibrated "
+            "scientific validation."
+        )
+
+        mast_target = st.text_input(
+            "Target name",
+            key="mission_mast_target",
+        )
+
+        mast_proposal = st.text_input(
+            "Proposal ID",
+            key="mission_mast_proposal",
+        )
+
+        mast_instrument = st.text_input(
+            "Instrument (optional)",
+            key="mission_mast_instrument",
+        )
+
+        if st.button(
+            "Search JWST MAST",
+            key="mission_mast_search",
+        ):
+            if not any([
+                mast_target.strip(),
+                mast_proposal.strip(),
+                mast_instrument.strip(),
+            ]):
+                st.warning(
+                    "Enter a target name, proposal ID, "
+                    "or instrument."
+                )
+            else:
+                try:
+                    from mission_data_client import MissionDataClient
+
+                    client = MissionDataClient(
+                        max_download_mb=30,
+                        max_results=20,
+                    )
+
+                    observations = client.search_jwst(
+                        target=mast_target.strip() or None,
+                        proposal_id=mast_proposal.strip() or None,
+                        instrument=mast_instrument.strip() or None,
+                        limit=20,
+                    )
+
+                    st.session_state[
+                        "mission_mast_results"
+                    ] = observations
+
+                    st.success(
+                        f"Returned {len(observations)} JWST observations."
+                    )
+
+                except Exception as exc:
+                    st.error(
+                        "JWST MAST search failed."
+                    )
+                    st.code(
+                        f"{type(exc).__name__}: {exc}"
+                    )
+
+        mast_results = st.session_state.get(
+            "mission_mast_results",
+            [],
+        )
+
+        if mast_results:
+            st.dataframe(
+                pd.DataFrame(mast_results),
+                use_container_width=True,
+            )
+
+        st.caption(
+            "Module 33 currently implements JWST/MAST search. "
+            "Chandra archive search is not implemented in that module."
+        )
+
+    # -----------------------------------------------------
+    # LOCAL FITS UPLOAD
+    # -----------------------------------------------------
+
+    uploaded_fits = st.file_uploader(
+        "Upload a JWST or Chandra FITS product",
+        type=[
+            "fits",
+            "fit",
+            "fts",
+            "gz",
+        ],
+        accept_multiple_files=False,
+        key="mission_fits_upload",
+    )
+
+    if uploaded_fits is None:
+        st.info(
+            "Upload a local FITS file to start mission processing."
+        )
+        return
+
+    raw_bytes = uploaded_fits.getvalue()
+    filename = Path(uploaded_fits.name).name
+    filename_lower = filename.lower()
+
+    supported_extensions = (
+        ".fits",
+        ".fit",
+        ".fts",
+        ".fits.gz",
+        ".fit.gz",
+        ".fts.gz",
+    )
+
+    if not filename_lower.endswith(supported_extensions):
+        st.error("Unsupported FITS filename extension.")
+        return
+
+    file_hash = hashlib.sha256(raw_bytes).hexdigest()
+
+    st.write({
+        "filename": filename,
+        "size_bytes": len(raw_bytes),
+        "sha256": file_hash,
+    })
+
+    # -----------------------------------------------------
+    # ROUTING OPTIONS
+    # -----------------------------------------------------
+
+    mission_choice = st.selectbox(
+        "Mission identification",
+        options=[
+            "Auto-detect",
+            "JWST",
+            "CHANDRA",
+        ],
+        key="mission_fits_mission",
+    )
+
+    product_choice = st.selectbox(
+        "Science product",
+        options=[
+            "Auto-detect",
+            "image",
+            "spectrum",
+            "cube",
+            "events",
+            "exposure_map",
+        ],
+        key="mission_fits_product",
+    )
+
+    mission_arg = (
+        None
+        if mission_choice == "Auto-detect"
+        else mission_choice
+    )
+
+    product_arg = (
+        None
+        if product_choice == "Auto-detect"
+        else product_choice
+    )
+
+    st.caption(
+        "Auto-detection uses FITS metadata and product structure. "
+        "If the file is ambiguous, select the mission or product "
+        "explicitly and retry."
+    )
+
+    # -----------------------------------------------------
+    # PROCESS FITS
+    # -----------------------------------------------------
+
+    if st.button(
+        "🚀 Process Mission FITS",
+        type="primary",
+        key="mission_fits_process",
+    ):
+
+        # Clear stale results before starting a new run.
+        st.session_state.pop(
+            "mission_fits_result",
+            None,
+        )
+
+        try:
+            from resource_guard import ResourceGuard
+            from fits_inspector import FITSInspector
+            from science_product_router import ScienceProductRouter
+            from space_visualization import SpaceVisualizer
+            from mission_report import build_mission_report
+
+            with tempfile.TemporaryDirectory(
+                prefix="d3_vital_x_mission_"
+            ) as temporary_directory:
+
+                fits_path = (
+                    Path(temporary_directory) / filename
+                )
+
+                fits_path.write_bytes(raw_bytes)
+
+                # -----------------------------------------
+                # MODULE 34: RESOURCE GUARD
+                # -----------------------------------------
+
+                guard = ResourceGuard(
+                    max_file_mb=30,
+                    warning_file_mb=20,
+                    max_array_mb=256,
+                )
+
+                resource_result = guard.validate_file(
+                    fits_path,
+                    expected_extensions=supported_extensions,
+                )
+
+                st.success(
+                    "Module 34 — Resource validation passed."
+                )
+
+                # -----------------------------------------
+                # MODULE 35: FITS INSPECTOR
+                # -----------------------------------------
+
+                inspector = FITSInspector(
+                    max_file_mb=30,
+                )
+
+                fits_info = inspector.inspect(
+                    fits_path,
+                    verify_fits=True,
+                )
+
+                st.success(
+                    "Module 35 — FITS inspection completed."
+                )
+
+                with st.expander(
+                    "FITS structure and metadata",
+                    expanded=False,
+                ):
+                    st.json(fits_info)
+
+                # -----------------------------------------
+                # MODULE 38: SCIENCE PRODUCT ROUTER
+                # -----------------------------------------
+
+                router = ScienceProductRouter(
+                    max_file_mb=30,
+                )
+
+                routing_result = router.route(
+                    path=str(fits_path),
+                    mission=mission_arg,
+                    product_type=product_arg,
+                    operation="read",
+                )
+
+                routing = routing_result.get(
+                    "routing",
+                    {},
+                )
+
+                detected_mission = routing.get(
+                    "mission"
+                )
+
+                detected_product = routing.get(
+                    "product_type"
+                )
+
+                if not detected_mission or not detected_product:
+                    raise ValueError(
+                        "Router did not return mission and product type."
+                    )
+
+                st.success(
+                    "Module 38 — Product routing completed."
+                )
+
+                st.write({
+                    "mission": detected_mission,
+                    "product_type": detected_product,
+                    "adapter": routing.get("adapter"),
+                    "routing_status": routing.get("status"),
+                })
+
+                # -----------------------------------------
+                # MODULE 36 / 37: ADAPTER RESULT
+                # -----------------------------------------
+
+                product_result = routing_result
+
+                # The router already dispatched the product to
+                # JWSTAdapter or ChandraAdapter.
+                # Do not read the same FITS file a second time.
+
+                st.success(
+                    f"{detected_mission} adapter processing completed."
+                )
+
+                # -----------------------------------------
+                # MODULE 39: SPACE VISUALIZATION
+                # -----------------------------------------
+
+                visualizer = SpaceVisualizer()
+
+                visualization_result = visualizer.render_product(
+                    product_result,
+                    product_type=detected_product,
+                )
+
+                figure = visualization_result.get("figure")
+
+                if figure is not None:
+                    st.subheader("Mission Product Visualization")
+
+                    st.pyplot(
+                        figure,
+                        clear_figure=False,
+                    )
+
+                visualization_summary = (
+                    visualization_result.get("summary", {})
+                )
+
+                st.json(visualization_summary)
+
+                # -----------------------------------------
+                # QC AND OBSERVATION METADATA
+                # -----------------------------------------
+
+                qc_data = product_result.get("qc", {})
+
+                if not isinstance(qc_data, dict):
+                    qc_data = {}
+
+                adapter_warnings = product_result.get(
+                    "warnings",
+                    [],
+                )
+
+                qc_report = dict(qc_data)
+
+                existing_warnings = qc_report.get(
+                    "warnings",
+                    [],
+                )
+
+                if not isinstance(existing_warnings, list):
+                    existing_warnings = []
+
+                qc_report["warnings"] = (
+                    existing_warnings + adapter_warnings
+                )
+
+                observation_metadata = (
+                    product_result.get("metadata")
+                    or product_result.get("header")
+                    or fits_info.get("mission_metadata")
+                    or {}
+                )
+
+                if not isinstance(observation_metadata, dict):
+                    observation_metadata = {}
+
+                # -----------------------------------------
+                # MODULE 40: MISSION REPORT
+                # -----------------------------------------
+
+                fits_validation = dict(fits_info)
+
+                fits_validation["is_valid"] = (
+                    not bool(fits_info.get("errors"))
+                    and int(fits_info.get("hdu_count", 0)) > 0
+                )
+
+                fits_validation["validation_status"] = (
+                    fits_info.get("status", "inspection_completed")
+                )
+
+                plotted_count = (
+                    visualization_summary.get("total_points")
+                    or visualization_summary.get("event_positions")
+                )
+
+                if plotted_count is not None:
+                    plotted_count = int(plotted_count)
+
+                report = build_mission_report(
+                    input_file=str(fits_path),
+                    mission=detected_mission,
+                    product_type=detected_product,
+
+                    file_metadata=resource_result,
+
+                    fits_validation=fits_validation,
+
+                    observation_metadata={
+                        **observation_metadata,
+                        "mission": detected_mission,
+                        "product_type": detected_product,
+                    },
+
+                    qc_report=qc_report,
+
+                    visualization={
+                        "generated": figure is not None,
+                        "plot_type": visualization_result.get(
+                            "visualization_type",
+                            detected_product,
+                        ),
+                        "output_format": "Matplotlib Figure",
+                        "summary": visualization_summary,
+                    },
+
+                    processing_settings={
+                        "operation": "local_fits_read",
+                        "resource_limit_mb": 30,
+                        "mission_selection": mission_choice,
+                        "product_selection": product_choice,
+                        "router_status": routing.get("status"),
+                    },
+
+                    provenance={
+                        "input_sha256": file_hash,
+                        "source_type": "user_uploaded_local_fits",
+                        "modules": {
+                            "resource_guard": "34",
+                            "fits_inspector": "35",
+                            "jwst_adapter": "36",
+                            "chandra_adapter": "37",
+                            "science_product_router": "38",
+                            "space_visualization": "39",
+                            "mission_report": "40",
+                        },
+                    },
+
+                    calibration_completed=False,
+                    calibration_details=(
+                        "No calibration was performed by this workflow."
+                    ),
+
+                    plotted_point_count=plotted_count,
+                    compute_checksum=True,
+                )
+
+                # Validate report before exposing it.
+                from mission_report import MissionReportBuilder
+
+                report_validation = (
+                    MissionReportBuilder.validate_report(report)
+                )
+
+                if not report_validation["valid"]:
+                    raise ValueError(
+                        "Mission report failed structural validation: "
+                        + str(report_validation)
+                    )
+
+                report_json = json.dumps(
+                    report,
+                    ensure_ascii=False,
+                    indent=2,
+                    allow_nan=False,
+                )
+
+                # Keep only JSON-safe outputs in session state.
+                st.session_state["mission_fits_result"] = {
+                    "mission": detected_mission,
+                    "product_type": detected_product,
+                    "report_json": report_json,
+                    "report_validation": report_validation,
+                    "visualization_summary": visualization_summary,
+                    "file_hash": file_hash,
+                }
+
+                st.success(
+                    "Mission FITS processing and report generation completed."
+                )
+
+        except Exception as exc:
+            st.error(
+                "Mission FITS processing could not be completed."
+            )
+
+            st.code(
+                f"{type(exc).__name__}: {exc}"
+            )
+
+            st.info(
+                "Check the FITS file, resource limits, "
+                "Astropy/Matplotlib dependencies, and routing options."
+            )
+
+    
+    # -----------------------------------------------------
+    # REPORT DISPLAY AND DOWNLOAD
+    # -----------------------------------------------------
+
+    saved_result = st.session_state.get(
+        "mission_fits_result"
+    )
+
+    if saved_result:
+        st.divider()
+        st.subheader("📄 Mission Processing Report")
+
+        st.write({
+            "mission": saved_result["mission"],
+            "product_type": saved_result["product_type"],
+            "report_validation": saved_result["report_validation"],
+        })
+
+        st.download_button(
+            label="Download Mission Report JSON",
+            data=saved_result["report_json"].encode("utf-8"),
+            file_name="d3_vital_x_mission_report.json",
+            mime="application/json",
+            key="mission_report_download",
+        )
+
+        with st.expander("View JSON report"):
+            st.json(
+                json.loads(saved_result["report_json"])
+            )
+
+        st.caption(
+            "Report scope: processing provenance and exploratory diagnostics. "
+            "It is not scientific certification or anomaly confirmation."
+        )
+
+
 # ---------------------------------------------------------
 # MAIN PAGE
 # ---------------------------------------------------------
