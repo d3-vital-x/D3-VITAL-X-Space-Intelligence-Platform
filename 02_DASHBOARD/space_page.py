@@ -346,7 +346,6 @@ def _baseline_from_upload(uploaded_file: Any) -> dict[str, dict[str, float]]:
     return validated
 
 
-
 # ---------------------------------------------------------
 # MODULES 33–40: MISSION FITS WORKFLOW
 # ---------------------------------------------------------
