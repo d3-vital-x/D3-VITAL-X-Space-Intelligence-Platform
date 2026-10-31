@@ -937,6 +937,8 @@ def render_page() -> None:
         "A score is a diagnostic indicator, not a confirmed discovery."
     )
 
+    render_mission_fits_workflow()
+    
     with st.expander(
         "Scientific scope and limitations",
         expanded=False,
