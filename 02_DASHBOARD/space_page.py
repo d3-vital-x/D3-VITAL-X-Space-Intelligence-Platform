@@ -113,6 +113,31 @@ st.session_state["space_analytics_path"] = str(ANALYTICS_DIR)
 
 
 # ---------------------------------------------------------
+# SPACE MISSION MODULE DISCOVERY
+# ---------------------------------------------------------
+
+INPUT_ADAPTERS_DIR = PROJECT_ROOT / "03_INPUT_ADAPTERS"
+VISUALIZATION_DIR = PROJECT_ROOT / "07_VISUALIZATION"
+
+for module_dir in (
+    INPUT_ADAPTERS_DIR,
+    VISUALIZATION_DIR,
+):
+    if not module_dir.is_dir():
+        st.error(
+            f"Required public module directory not found: {module_dir}"
+        )
+        st.stop()
+
+    module_path = str(module_dir)
+
+    if module_path in sys.path:
+        sys.path.remove(module_path)
+
+    sys.path.insert(0, module_path)
+
+
+# ---------------------------------------------------------
 # SERIALIZATION HELPERS
 # ---------------------------------------------------------
 
